@@ -140,7 +140,9 @@ function previewDepot(doc, box) {
     const p = state.portfolio;
     for (const x of doc.positions) {
       const s = p.securities[x.isin] || {};
-      p.securities[x.isin] = { ...s, name: s.name && s.name !== x.isin ? s.name : x.name, type: s.type || x.type, lastPrice: x.price, lastPriceDate: date, lastDepotDate: date };
+      // Ein älterer Auszug darf neuere Stichtagskurse nicht überschreiben
+      const newer = !s.lastDepotDate || date >= s.lastDepotDate;
+      p.securities[x.isin] = { ...s, name: s.name && s.name !== x.isin ? s.name : x.name, type: s.type || x.type, ...(newer ? { lastPrice: x.price, lastPriceDate: date, lastDepotDate: date } : {}) };
     }
     let n = 0;
     for (const cb of $$('input[data-i]', box)) {
