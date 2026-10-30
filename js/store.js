@@ -3,6 +3,7 @@ import { CONFIG } from './config.js';
 const LS = {
   portfolio: 'fa.portfolio',
   prices: 'fa.prices',
+  dividends: 'fa.dividends',
   reports: 'fa.reports',
   gh: 'fa.gh',
   sha: 'fa.sha',
@@ -15,8 +16,20 @@ const emptyPortfolio = () => ({
   securities: {},
   transactions: [],
   watchlist: [],
+  portfolios: [],
+  views: [],
   settings: { targetEtf: 50, posMin: 2, posMax: 3 },
 });
+
+// Ältere Stände kennen nur ein Depot: alles landet im ersten Portfolio
+export function normalize(p) {
+  p.portfolios ||= [];
+  if (!p.portfolios.length) p.portfolios.push({ id: 'p1', name: 'Scalable Capital' });
+  p.views ||= [];
+  const def = p.portfolios[0].id;
+  p.transactions.forEach((t) => (t.pf ||= def));
+  return p;
+}
 
 const read = (k, d) => {
   try {
@@ -29,8 +42,9 @@ const read = (k, d) => {
 const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
 export const state = {
-  portfolio: read(LS.portfolio, null) || emptyPortfolio(),
+  portfolio: normalize({ ...emptyPortfolio(), ...(read(LS.portfolio, null) || {}) }),
   prices: read(LS.prices, { quotes: {}, history: {}, updated: null }),
+  dividends: read(LS.dividends, { byIsin: {}, updated: null }),
   reports: read(LS.reports, []),
   sync: { status: 'lokal', error: null },
   listeners: new Set(),
@@ -176,20 +190,25 @@ export async function syncAll() {
     const remote = await ghGetJson('data/portfolio.json', { withSha: true });
     const dirty = read(LS.dirty, false);
     if (remote.data && !dirty) {
-      state.portfolio = { ...emptyPortfolio(), ...remote.data };
+      state.portfolio = normalize({ ...emptyPortfolio(), ...remote.data });
       write(LS.portfolio, state.portfolio);
       write(LS.sha, remote.sha);
     } else {
       write(LS.sha, remote.sha);
       if (dirty || !remote.data) await pushPortfolio('Portfolio aus App übernommen');
     }
-    const [prices, reports] = await Promise.all([
+    const [prices, reports, dividends] = await Promise.all([
       ghGetJson('data/prices.json').catch(() => ({ data: null })),
       ghGetJson('reports/index.json').catch(() => ({ data: null })),
+      ghGetJson('data/dividends.json').catch(() => ({ data: null })),
     ]);
     if (prices.data) {
       state.prices = prices.data;
       write(LS.prices, state.prices);
+    }
+    if (dividends.data) {
+      state.dividends = dividends.data;
+      write(LS.dividends, state.dividends);
     }
     if (reports.data) {
       state.reports = reports.data;
@@ -229,7 +248,7 @@ export function exportBackup() {
 export function importBackup(text) {
   const p = JSON.parse(text);
   if (!p || !Array.isArray(p.transactions)) throw new Error('Keine gültige Sicherung');
-  state.portfolio = { ...emptyPortfolio(), ...p };
+  state.portfolio = normalize({ ...emptyPortfolio(), ...p });
 }
 export function resetLocal() {
   Object.values(LS).forEach((k) => localStorage.removeItem(k));

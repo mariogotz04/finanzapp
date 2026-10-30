@@ -34,3 +34,36 @@ export function setActiveTab(name) {
 export function confirmDialog(msg) {
   return window.confirm(msg);
 }
+
+const LOGO_COLORS = ['#5b8def', '#e5484d', '#f5a524', '#3dd68c', '#a78bfa', '#2dd4bf', '#f472b6', '#fb923c', '#60a5fa', '#c084fc'];
+const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// Firmenlogo per ISIN (Eulerpool, ohne Key), Initialen als Fallback
+export function logo(id, name, size = 34) {
+  const ini = (name || id || '?')
+    .replace(/[^A-Za-zÄÖÜäöü0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+  const color = LOGO_COLORS[[...String(id)].reduce((s, c) => s + c.charCodeAt(0), 0) % LOGO_COLORS.length];
+  const img = /^[A-Z]{2}[A-Z0-9]{9}\d$/.test(id) ? `<img src="https://api.eulerpool.com/api/logo/isin/${id}" alt="" loading="lazy" onerror="this.remove()">` : '';
+  return `<span class="logo" style="--s:${size}px;background:${color}">${escHtml(ini)}${img}</span>`;
+}
+
+// Bottom-Sheet wie in Parqet; onMount(el, close)
+export function sheet(html, onMount) {
+  const bg = document.createElement('div');
+  bg.className = 'sheet-bg';
+  bg.innerHTML = `<div class="sheet"><div class="grab"></div>${html}</div>`;
+  const close = () => bg.remove();
+  bg.addEventListener('click', (e) => e.target === bg && close());
+  document.body.append(bg);
+  onMount?.(bg, close);
+  return close;
+}
+
+export function segButtons(items, active, attr = 'k', extra = '') {
+  return `<div class="seg ${extra}">${items.map(([k, l]) => `<button data-${attr}="${k}" class="${k === active ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+}

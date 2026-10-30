@@ -1,12 +1,16 @@
 import { state, savePortfolio } from '../store.js';
 import { TX_LABEL, sortedTx } from '../calc.js';
-import { mount, $, $$, toast, confirmDialog } from '../ui.js';
+import { scoped, defaultPf, pfName } from '../scope.js';
+import { mount, $, $$, toast, confirmDialog, logo } from '../ui.js';
 import { eur, num, esc, deDate, today, parseDeNum, uid, isValidIsin } from '../util.js';
 
 let filter = 'alle';
 
-export function renderActivities() {
-  const p = state.portfolio;
+export function renderActivities(q) {
+  if (q?.get('f')) filter = q.get('f');
+  const full = state.portfolio;
+  const p = scoped();
+  const multi = full.portfolios.length > 1;
   const txs = sortedTx(p)
     .reverse()
     .filter((t) => filter === 'alle' || (filter === 'trade' ? ['buy', 'sell', 'correction'].includes(t.type) : t.type === filter));
@@ -28,7 +32,7 @@ export function renderActivities() {
         ([m, arr]) => `<h3 class="sec">${monthName(m)}</h3><ul class="list">${arr
           .map((t) => {
             const name = t.isin ? p.securities[t.isin]?.name || t.isin : TX_LABEL[t.type];
-            return `<li><a href="#/tx/${t.id}"><div class="l"><b>${esc(name)}</b><small>${TX_LABEL[t.type]} · ${deDate(t.date)}${t.shares ? ` · ${num(t.shares)} Stk.` : ''}</small></div>
+            return `<li><a href="#/tx/${t.id}">${t.isin ? logo(t.isin, name, 32) : ''}<div class="l"><b>${esc(name)}</b><small>${TX_LABEL[t.type]} · ${deDate(t.date)}${t.shares ? ` · ${num(t.shares)} Stk.` : ''}${multi ? ` · ${esc(pfName(full, t.pf))}` : ''}</small></div>
             <div class="r"><b class="${['dividend', 'sell', 'deposit', 'interest'].includes(t.type) ? 'pos' : ''}">${t.type === 'correction' ? '–' : eur(t.amount)}</b>${t.tax ? `<small class="muted">−${eur(t.tax)} Steuer</small>` : ''}</div></a></li>`;
           })
           .join('')}</ul>`,
@@ -38,12 +42,13 @@ export function renderActivities() {
     'Aktivitäten',
   );
   $$('.seg button').forEach((b) => b.addEventListener('click', () => ((filter = b.dataset.f), renderActivities())));
+  if (q?.get('f')) history.replaceState(null, '', '#/aktivitaeten');
 }
 
 export function renderTxForm(id, query) {
   const p = state.portfolio;
   const existing = id ? p.transactions.find((t) => t.id === id) : null;
-  const t = existing || { type: 'buy', date: today(), isin: query.get('isin') || '', shares: '', amount: '', fee: '', tax: '' };
+  const t = existing || { type: 'buy', date: today(), isin: query.get('isin') || '', shares: '', amount: '', fee: '', tax: '', pf: defaultPf(p) };
   const sec = p.securities[t.isin] || {};
   const secOptions = Object.entries(p.securities)
     .sort((a, b) => a[1].name.localeCompare(b[1].name))
@@ -57,8 +62,9 @@ export function renderTxForm(id, query) {
         .map(([k, l]) => `<option value="${k}" ${k === t.type ? 'selected' : ''}>${l}</option>`)
         .join('')}</select></label>
       <label>Datum<input type="date" id="f-date" value="${t.date}"></label>
+      <label>Portfolio<select id="f-pf">${p.portfolios.map((x) => `<option value="${x.id}" ${x.id === (t.pf || defaultPf(p)) ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
       <div class="sec-fields">
-        <label>ISIN<input id="f-isin" list="secs" autocapitalize="characters" value="${esc(t.isin || '')}" placeholder="z. B. US1912161007"></label>
+        <label>ISIN (bei Krypto: Kürzel wie BTC)<input id="f-isin" list="secs" autocapitalize="characters" value="${esc(t.isin || '')}" placeholder="z. B. US1912161007"></label>
         <datalist id="secs">${secOptions}</datalist>
         <label>Name<input id="f-name" value="${esc(sec.name || '')}" placeholder="z. B. Coca-Cola"></label>
         <label>Typ<select id="f-sectype">${['Aktie', 'ETF', 'Fonds', 'Krypto', 'Anleihe'].map((x) => `<option ${x === (sec.type || 'Aktie') ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
@@ -116,9 +122,11 @@ export function renderTxForm(id, query) {
       date: $('#f-date').value,
       amount: type === 'correction' ? 0 : n('#f-amount'),
       source: existing?.source || 'manuell',
+      pf: $('#f-pf').value,
     };
     if (withSec) {
-      if (!isValidIsin(isin)) return toast('Bitte gültige ISIN eingeben');
+      const crypto = $('#f-sectype').value === 'Krypto';
+      if (crypto ? !/^[A-Z0-9]{2,10}$/.test(isin) : !isValidIsin(isin)) return toast(crypto ? 'Bitte Krypto-Kürzel eingeben (z. B. BTC)' : 'Bitte gültige ISIN eingeben');
       tx.isin = isin;
       const name = $('#f-name').value.trim();
       p.securities[isin] = { ...(p.securities[isin] || {}), name: name || p.securities[isin]?.name || isin, type: $('#f-sectype').value };

@@ -1,16 +1,21 @@
 import { state, savePortfolio } from '../store.js';
+import { defaultPf } from '../scope.js';
 import { TX_LABEL, holdingSharesAt, computeHoldings } from '../calc.js';
 import { mount, $, $$, toast } from '../ui.js';
 import { parsePdfFile } from '../pdfimport.js';
 import { eur, num, esc, deDate, uid } from '../util.js';
 
 let queue = [];
+let targetPf = null;
+// Abgleich und Doppelte nur innerhalb des Zielportfolios
+const inPf = (p) => ({ ...p, transactions: p.transactions.filter((t) => t.pf === targetPf) });
 
 export function renderImport() {
   mount(
     `<section class="card">
       <h3>PDF-Import (Scalable Capital)</h3>
       <p class="muted">Unterstützt: <b>Depotauszug</b> und <b>Finanzstatus</b> (Bestände, ISIN, exakte Stückzahl, Kurswert) sowie <b>Kontoauszug</b> (Käufe, Verkäufe, Dividenden, Quellensteuer, Einzahlungen). Mehrere Dateien gleichzeitig möglich – Kontoauszüge werden vor Depotauszügen verarbeitet.</p>
+      <label>Portfolio<select id="imp-pf">${state.portfolio.portfolios.map((x) => `<option value="${x.id}" ${x.id === defaultPf() ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
       <label class="file"><input type="file" id="pdf" accept="application/pdf" multiple><span>PDF auswählen</span></label>
       <div id="status" class="muted"></div>
     </section>
@@ -25,6 +30,7 @@ export function renderImport() {
   $('#pdf').onchange = async (e) => {
     const files = [...e.target.files];
     if (!files.length) return;
+    targetPf = $('#imp-pf').value;
     $('#status').textContent = 'Lese PDF…';
     const parsed = [];
     for (const f of files) {
@@ -59,7 +65,7 @@ const txKey = (t) => `${t.date}|${t.type}|${t.isin || ''}|${Number(t.amount).toF
 
 function previewKonto(doc, box) {
   const p = state.portfolio;
-  const keys = new Set(p.transactions.map((t) => t.key || txKey(t)));
+  const keys = new Set(inPf(p).transactions.map((t) => t.key || txKey(t)));
   const items = doc.items.map((it) => ({ ...it, key: txKey(it), dup: keys.has(txKey(it)) }));
   const usable = items;
   box.innerHTML = `<section class="card">
@@ -84,7 +90,7 @@ function previewKonto(doc, box) {
       const it = usable[+cb.dataset.i];
       if (it.type === 'unknown') continue;
       if (it.isin && !p.securities[it.isin]) p.securities[it.isin] = { name: it.name || it.isin, type: /^IE|^LU/.test(it.isin) ? 'ETF' : 'Aktie' };
-      const tx = { id: uid(), key: it.key, type: it.type, date: it.date, amount: Math.round(it.amount * 100) / 100, source: 'konto' };
+      const tx = { id: uid(), key: it.key, type: it.type, date: it.date, amount: Math.round(it.amount * 100) / 100, source: 'konto', pf: targetPf };
       if (it.isin) tx.isin = it.isin;
       if (it.shares != null) tx.shares = it.shares;
       if (it.type === 'dividend') tx.tax = it.tax || 0;
@@ -98,7 +104,7 @@ function previewKonto(doc, box) {
 }
 
 function previewDepot(doc, box) {
-  const p = state.portfolio;
+  const p = inPf(state.portfolio);
   const date = doc.date;
   const inPdf = new Set(doc.positions.map((x) => x.isin));
   const held = computeHoldings(p, state.prices).positions.filter((x) => !inPdf.has(x.isin));
@@ -142,7 +148,7 @@ function previewDepot(doc, box) {
       const i = +cb.dataset.i;
       const x = all[i];
       const action = $(`select[data-a="${i}"]`, box)?.value || x.action;
-      const base = { id: uid(), isin: x.isin, date, source: 'depot' };
+      const base = { id: uid(), isin: x.isin, date, source: 'depot', pf: targetPf };
       const amt = Math.round(Math.abs(x.diff) * x.price * 100) / 100;
       if (action === 'new') p.transactions.push({ ...base, type: 'buy', shares: x.diff, amount: amt, needsCost: true });
       else if (action === 'buy') p.transactions.push({ ...base, type: 'buy', shares: x.diff, amount: amt });

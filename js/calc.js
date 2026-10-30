@@ -199,9 +199,11 @@ export function computeSeries(p, prices, filterIsin = null) {
   return out;
 }
 
+export const RANGES = ['Heute', '7T', '30T', '1J', 'YTD', 'Max'];
+
 export function rangeStart(range) {
   const t = new Date();
-  const map = { '1W': 7, '1M': 30, '6M': 182, '1J': 365, '3J': 1095 };
+  const map = { Heute: 1, '7T': 7, '30T': 30, '1W': 7, '1M': 30, '6M': 182, '1J': 365, '3J': 1095 };
   if (range === 'YTD') return `${t.getFullYear()}-01-01`;
   if (map[range]) return addDays(toISO(t), -map[range]);
   return '0000-00-00';

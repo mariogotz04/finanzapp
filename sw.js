@@ -1,4 +1,4 @@
-const CACHE = 'depot-v1';
+const CACHE = 'depot-v2';
 const CORE = [
   './',
   './index.html',
@@ -12,12 +12,17 @@ const CORE = [
   './js/ui.js',
   './js/util.js',
   './js/pdfimport.js',
+  './js/scope.js',
+  './js/divs.js',
   './js/views/overview.js',
   './js/views/positions.js',
   './js/views/activities.js',
   './js/views/importview.js',
   './js/views/reports.js',
   './js/views/settings.js',
+  './js/views/dividends.js',
+  './js/views/analysis.js',
+  './js/views/portfolios.js',
   './icons/icon-180.png',
   './icons/icon-192.png',
 ];
