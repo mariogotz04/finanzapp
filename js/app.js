@@ -74,6 +74,9 @@ if (params.get('r')) {
   history.replaceState(null, '', location.pathname + `#/bericht/${params.get('r')}`);
 }
 
+// iOS ignoriert user-scalable=no – Pinch-Zoom hier unterbinden (Doppeltipp verhindert touch-action im CSS)
+for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+
 updateSyncDot();
 route();
 syncAll();
