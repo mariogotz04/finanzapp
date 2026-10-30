@@ -76,6 +76,8 @@ function previewKonto(doc, box) {
   </section>`;
   $('#skip').onclick = next;
   $('#apply').onclick = async () => {
+    // syncAll (z. B. nach dem iOS-Dateiauswahl-Dialog) kann state.portfolio inzwischen ersetzt haben
+    const p = state.portfolio;
     let n = 0;
     for (const cb of $$('input[data-i]', box)) {
       if (!cb.checked) continue;
@@ -129,6 +131,7 @@ function previewDepot(doc, box) {
   </section>`;
   $('#skip').onclick = next;
   $('#apply').onclick = async () => {
+    const p = state.portfolio;
     for (const x of doc.positions) {
       const s = p.securities[x.isin] || {};
       p.securities[x.isin] = { ...s, name: s.name && s.name !== x.isin ? s.name : x.name, type: s.type || x.type, lastPrice: x.price, lastPriceDate: date, lastDepotDate: date };
