@@ -45,7 +45,6 @@ export function renderAnalysis() {
   const txY = p.transactions.filter((t) => t.date.startsWith(yr));
   const taxY = txY.reduce((s, t) => s + (t.type === 'dividend' || t.type === 'sell' ? t.tax || 0 : t.type === 'tax' ? t.amount : 0), 0);
   const fees12 = p.transactions.filter((t) => t.date > addDays(today(), -365)).reduce((s, t) => s + (t.type === 'fee' ? t.amount : t.fee || 0), 0);
-  const lastTrade = sortedTx(p).filter((t) => ['buy', 'sell'].includes(t.type) && t.source !== 'depot').pop();
   const classes = new Set(h.positions.map((x) => x.type)).size;
   const heat = monthReturns(p).slice(-9);
   mount(
@@ -54,7 +53,6 @@ export function renderAnalysis() {
       ${card('#/rendite', 'Renditedetails', `<div class="heat mini">${heat.map((m) => `<span class="${m.r == null ? '' : m.r >= 0 ? 'up' : 'dn'}" style="opacity:${m.r == null ? 0.25 : Math.min(1, 0.35 + Math.abs(m.r) / 6)}"></span>`).join('')}</div>`)}
       ${card('#/kapitalfluss', 'Kapitalfluss', `<div class="row-kv"><span class="muted small">Einzahlungen ${yr}</span><b>${eur(txY.filter((t) => t.type === 'deposit').reduce((s, t) => s + t.amount, 0))}</b></div>`)}
       ${card('#/gebuehren', 'Gebühren (12 Monate)', `<small class="muted">Gesamt</small><b>${eur(fees12)}</b>`)}
-      ${card(lastTrade ? `#/tx/${lastTrade.id}` : '#/aktivitaeten', 'Dein letzter Trade', lastTrade ? `<div class="li-row">${logo(lastTrade.isin, p.securities[lastTrade.isin]?.name, 28)}<div class="l"><small>${esc(p.securities[lastTrade.isin]?.name || '')}</small><b>${lastTrade.type === 'buy' ? 'Kauf' : 'Verkauf'} ${eur(lastTrade.amount)}</b><small class="muted">${deDate(lastTrade.date)}</small></div></div>` : '<small class="muted">Noch kein Trade</small>')}
     </div>
     ${card(`#/steuern?y=${yr}`, 'Steuerdashboard', `<div class="kv"><span>Steuern auf Dividenden</span><b>${eur(txY.filter((t) => t.type === 'dividend').reduce((s, t) => s + (t.tax || 0), 0))}</b></div>
       <div class="kv"><span>Steuern auf Verkäufe</span><b>${eur(txY.filter((t) => t.type === 'sell').reduce((s, t) => s + (t.tax || 0), 0))}</b></div>
