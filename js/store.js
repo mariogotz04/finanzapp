@@ -50,6 +50,14 @@ export const state = {
   listeners: new Set(),
 };
 
+// Inhalt austauschen statt das Objekt zu ersetzen: Ansichten und Formulare halten Referenzen
+// auf state.portfolio (z. B. nach einem Sync, wenn iOS die App kurz in den Hintergrund schickt).
+function replacePortfolio(next) {
+  const p = state.portfolio;
+  Object.keys(p).forEach((k) => delete p[k]);
+  Object.assign(p, normalize({ ...emptyPortfolio(), ...next }));
+}
+
 export function onChange(fn) {
   state.listeners.add(fn);
 }
@@ -190,7 +198,7 @@ export async function syncAll() {
     const remote = await ghGetJson('data/portfolio.json', { withSha: true });
     const dirty = read(LS.dirty, false);
     if (remote.data && !dirty) {
-      state.portfolio = normalize({ ...emptyPortfolio(), ...remote.data });
+      replacePortfolio(remote.data);
       write(LS.portfolio, state.portfolio);
       write(LS.sha, remote.sha);
     } else {
@@ -248,7 +256,7 @@ export function exportBackup() {
 export function importBackup(text) {
   const p = JSON.parse(text);
   if (!p || !Array.isArray(p.transactions)) throw new Error('Keine gültige Sicherung');
-  state.portfolio = normalize({ ...emptyPortfolio(), ...p });
+  replacePortfolio(p);
 }
 export function resetLocal() {
   Object.values(LS).forEach((k) => localStorage.removeItem(k));

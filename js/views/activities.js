@@ -143,7 +143,9 @@ export function renderTxForm(id, query) {
     if (type === 'sell' && tx.fee) tx.amount -= tx.fee;
     const note = $('#f-note').value.trim();
     if (note) tx.note = note;
-    if (existing) Object.assign(existing, tx, { needsCost: false });
+    // Buchung erst beim Speichern auflösen – das Portfolio kann zwischenzeitlich neu geladen worden sein
+    const cur = existing && p.transactions.find((x) => x.id === existing.id);
+    if (cur) Object.assign(cur, tx, { needsCost: false });
     else p.transactions.push(tx);
     await savePortfolio(`${TX_LABEL[type]} ${tx.isin || ''} gespeichert`);
     toast('Gespeichert');
