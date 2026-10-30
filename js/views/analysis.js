@@ -153,8 +153,8 @@ export function renderCashflow() {
     const f = (flows[k] ||= { dep: 0, wd: 0, buy: 0, sell: 0, div: 0 });
     if (t.type === 'deposit') f.dep += t.amount;
     if (t.type === 'withdrawal') f.wd += t.amount;
-    if (t.type === 'buy' && t.source !== 'depot') f.buy += t.amount;
-    if (t.type === 'sell') f.sell += t.amount;
+    if (t.type === 'buy' && !['depot', 'transfer'].includes(t.source)) f.buy += t.amount;
+    if (t.type === 'sell' && t.source !== 'transfer') f.sell += t.amount;
     if (t.type === 'dividend') f.div += t.amount - (t.tax || 0);
   }
   const keys = Object.keys(flows)

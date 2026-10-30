@@ -3,6 +3,7 @@ import { defaultPf } from '../scope.js';
 import { TX_LABEL, holdingSharesAt, computeHoldings } from '../calc.js';
 import { mount, $, $$, toast } from '../ui.js';
 import { parsePdfFile } from '../pdfimport.js';
+import { isParqetCsv, parseParqet } from '../parqetimport.js';
 import { eur, num, esc, deDate, uid } from '../util.js';
 
 let queue = [];
@@ -13,10 +14,10 @@ const inPf = (p) => ({ ...p, transactions: p.transactions.filter((t) => t.pf ===
 export function renderImport() {
   mount(
     `<section class="card">
-      <h3>PDF-Import (Scalable Capital)</h3>
+      <h3>Import (Scalable-PDFs, Parqet-CSV)</h3>
       <p class="muted">Unterstützt: <b>Depotauszug</b> und <b>Finanzstatus</b> (Bestände, ISIN, exakte Stückzahl, Kurswert) sowie <b>Kontoauszug</b> (Käufe, Verkäufe, Dividenden, Quellensteuer, Einzahlungen). Mehrere Dateien gleichzeitig möglich – Kontoauszüge werden vor Depotauszügen verarbeitet.</p>
       <label>Portfolio<select id="imp-pf">${state.portfolio.portfolios.map((x) => `<option value="${x.id}" ${x.id === defaultPf() ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
-      <label class="file"><input type="file" id="pdf" accept="application/pdf" multiple><span>PDF auswählen</span></label>
+      <label class="file"><input type="file" id="pdf" accept="application/pdf,text/csv,.csv" multiple><span>PDF oder CSV auswählen</span></label>
       <div id="status" class="muted"></div>
     </section>
     <section class="card">
@@ -35,12 +36,16 @@ export function renderImport() {
     const parsed = [];
     for (const f of files) {
       try {
-        parsed.push(await parsePdfFile(f));
+        if (/\.csv$/i.test(f.name) || f.type === 'text/csv') {
+          const text = await f.text();
+          if (!isParqetCsv(text)) throw new Error('Keine Parqet-Aktivitäten-CSV');
+          parsed.push(parseParqet(text, f.name));
+        } else parsed.push(await parsePdfFile(f));
       } catch (err) {
         toast(`${f.name}: ${err.message}`);
       }
     }
-    const rank = (x) => (x.kind === 'konto' ? 0 : 1);
+    const rank = (x) => (x.kind === 'parqet' ? -1 : x.kind === 'konto' ? 0 : 1);
     const dt = (x) => x.date || x.to || '';
     queue = parsed.sort((a, b) => rank(a) - rank(b) || dt(a).localeCompare(dt(b)));
     $('#status').textContent = '';
@@ -55,6 +60,7 @@ function next() {
     box.innerHTML = '';
     return;
   }
+  if (doc.kind === 'parqet') return previewParqet(doc, box);
   if (doc.kind === 'depot') return previewDepot(doc, box);
   if (doc.kind === 'konto') return previewKonto(doc, box);
   box.innerHTML = `<section class="card"><h3>${esc(doc.fileName)}</h3><p class="neg">Dokumenttyp nicht erkannt. Bitte Depotauszug, Finanzstatus oder Kontoauszug von Scalable verwenden.</p><button class="btn" id="skip">Weiter</button></section>`;
@@ -116,7 +122,8 @@ function previewDepot(doc, box) {
     let action = 'none';
     // Erster Abgleich der Position: Altbestand vor dem Kontoauszug hat noch keinen Einstand
     if (diff > 1e-6 && (cur.shares <= 1e-6 || !p.securities[x.isin]?.lastDepotDate)) action = 'new';
-    else if (Math.abs(diff) > 1e-6) action = kontoTrades ? 'correction' : diff > 0 ? 'buy' : 'sell';
+    // PDFs runden auf 4 Nachkommastellen – kleinere Abweichungen sind Rundung, kein Kauf/Verkauf
+    else if (Math.abs(diff) >= 6e-5) action = kontoTrades ? 'correction' : diff > 0 ? 'buy' : 'sell';
     return { ...x, cur: cur.shares, diff, action };
   });
   const gone = held.map((x) => ({ isin: x.isin, name: x.name, shares: 0, cur: x.shares, diff: -x.shares, price: x.price, action: 'correction', gone: true }));
@@ -128,7 +135,7 @@ function previewDepot(doc, box) {
     <ul class="list check">${all
       .map(
         (x, i) => `<li><label><input type="checkbox" data-i="${i}" ${x.action === 'none' || x.gone ? '' : 'checked'} ${x.action === 'none' ? 'disabled' : ''}>
-        <div class="l"><b>${esc(x.name)}</b><small>${esc(x.isin)} · ${num(x.shares)} Stk.${x.diff ? ` · <span class="${x.diff > 0 ? 'pos' : 'neg'}">${x.diff > 0 ? '+' : ''}${num(x.diff)}</span>` : ''}</small>
+        <div class="l"><b>${esc(x.name)}</b><small>${esc(x.isin)} · ${num(x.shares)} Stk.${x.diff && x.action !== 'none' ? ` · <span class="${x.diff > 0 ? 'pos' : 'neg'}">${x.diff > 0 ? '+' : ''}${num(x.diff)}</span>` : ''}</small>
         ${x.action !== 'none' && !x.gone && x.action !== 'new' ? `<select data-a="${i}">${['buy', 'sell', 'correction'].filter((a) => (x.diff > 0 ? a !== 'sell' : a !== 'buy')).map((a) => `<option value="${a}" ${a === x.action ? 'selected' : ''}>${label[a]}</option>`).join('')}</select>` : `<small>${x.gone ? 'Nicht mehr im Depot → Bestand auf 0' : label[x.action]}</small>`}</div>
         <div class="r"><b>${x.value != null ? eur(x.value) : ''}</b></div></label></li>`,
       )
@@ -163,5 +170,55 @@ function previewDepot(doc, box) {
     const missing = p.transactions.some((t) => t.needsCost);
     if (!queue.length && missing) location.hash = '#/einstand';
     else next();
+  };
+}
+
+function previewParqet(doc, box) {
+  const p = state.portfolio;
+  const opts = (sel) => `${p.portfolios.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}<option value="new" ${sel === 'new' ? 'selected' : ''}>Neues Portfolio</option>`;
+  box.innerHTML = `<section class="card">
+    <h3>Parqet-Export</h3>
+    <p class="muted">${doc.portfolios.reduce((s, x) => s + x.txs.length, 0)} Buchungen in ${doc.portfolios.length} Portfolio(s). Wähle je Parqet-Portfolio das Ziel in der App. „Ersetzen“ löscht vorher alle Buchungen im Ziel-Portfolio (z. B. aus PDF-Importen), damit nichts doppelt zählt.</p>
+    ${doc.portfolios
+      .map((x, i) => {
+        const same = p.portfolios.find((y) => y.name.toLowerCase() === x.name.toLowerCase());
+        const target = same ? same.id : 'new';
+        return `<div class="pq" data-i="${i}">
+        <label class="cb"><input type="checkbox" class="pq-on" checked> <b>${esc(x.name)}</b></label>
+        <small class="muted">${x.txs.length} Buchungen · ${deDate(x.from)} – ${deDate(x.to)}</small>
+        <label>Ziel in der App<select class="pq-target">${opts(target)}</select></label>
+        <label class="cb"><input type="checkbox" class="pq-replace" ${same ? 'checked' : ''}> Bisherige Buchungen im Ziel ersetzen</label></div>`;
+      })
+      .join('<hr>')}
+    ${doc.skipped.length ? `<p class="muted small">Übersprungen: ${doc.skipped.map(esc).join(' · ')}</p>` : ''}
+    <button class="btn primary" id="apply">Übernehmen</button><button class="btn" id="skip">Überspringen</button>
+  </section>`;
+  $('#skip').onclick = next;
+  $('#apply').onclick = async () => {
+    const p = state.portfolio;
+    let n = 0;
+    for (const el of $$('.pq', box)) {
+      if (!$('.pq-on', el).checked) continue;
+      const src = doc.portfolios[+el.dataset.i];
+      let target = $('.pq-target', el).value;
+      if (target === 'new') {
+        target = uid();
+        p.portfolios.push({ id: target, name: src.name });
+      }
+      if ($('.pq-replace', el).checked) p.transactions = p.transactions.filter((t) => t.pf !== target);
+      const have = new Set(p.transactions.filter((t) => t.pf === target && t.pqId).map((t) => t.pqId));
+      for (const t of src.txs) {
+        if (have.has(t.pqId)) continue;
+        p.transactions.push({ ...t, pf: target });
+        n++;
+      }
+    }
+    for (const [isin, s] of Object.entries(doc.securities)) {
+      const cur = p.securities[isin] || {};
+      p.securities[isin] = { ...s, ...cur, name: cur.name || s.name, type: cur.type || s.type };
+    }
+    await savePortfolio(`Parqet-Export importiert (${n} Buchungen)`);
+    toast(`${n} Buchungen aus Parqet übernommen`, 4000);
+    next();
   };
 }

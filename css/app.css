@@ -179,3 +179,4 @@ td a { color: var(--acc); }
 label.cb { flex-direction: row; align-items: center; gap: 8px; color: var(--txt); font-size: 15px; }
 a.noop { pointer-events: none; }
 @media (min-width: 700px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
+.pq { display: flex; flex-direction: column; gap: 2px; } hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }

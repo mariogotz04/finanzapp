@@ -17,22 +17,46 @@ export function sortedTx(p) {
   return [...p.transactions].sort((a, b) => a.date.localeCompare(b.date) || (order[a.type] ?? 3) - (order[b.type] ?? 3));
 }
 
+// Wie Parqet: Einstand ohne Kaufgebühren (die laufen als Kosten), Verkäufe nach FIFO,
+// realisierter Gewinn vor Verkaufsgebühren.
 function applyTx(pos, t, realized) {
+  pos.lots ||= pos.shares > 0 ? [{ shares: pos.shares, cost: pos.cost }] : [];
+  const consume = (n) => {
+    let left = n;
+    let removed = 0;
+    while (left > 1e-12 && pos.lots.length) {
+      const lot = pos.lots[0];
+      const take = Math.min(left, lot.shares);
+      const c = lot.shares > 0 ? (lot.cost * take) / lot.shares : 0;
+      lot.shares -= take;
+      lot.cost -= c;
+      removed += c;
+      left -= take;
+      if (lot.shares <= 1e-9) pos.lots.shift();
+    }
+    return removed;
+  };
   if (t.type === 'buy') {
+    const cost = t.amount - (t.fee || 0);
+    pos.lots.push({ shares: t.shares, cost });
     pos.shares += t.shares;
-    pos.cost += t.amount;
+    pos.cost += cost;
   } else if (t.type === 'sell') {
     const s = Math.min(t.shares, pos.shares);
-    const removed = pos.shares > 0 ? (pos.cost * s) / pos.shares : 0;
+    const removed = consume(s);
+    const gain = t.amount + (t.fee || 0) - removed;
     pos.cost -= removed;
     pos.shares -= s;
-    pos.realized += t.amount - removed;
-    if (realized) realized.v += t.amount - removed;
+    pos.realized += gain;
+    if (realized) realized.v += gain;
     if (pos.shares < 1e-6) {
       pos.shares = 0;
       pos.cost = 0;
+      pos.lots = [];
     }
   } else if (t.type === 'correction') {
+    if (t.shares > 0) pos.lots.push({ shares: t.shares, cost: 0 });
+    else pos.cost -= consume(-t.shares);
     pos.shares = Math.max(0, pos.shares + t.shares);
   }
 }

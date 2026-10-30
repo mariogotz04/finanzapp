@@ -1,4 +1,4 @@
-const CACHE = 'depot-v2';
+const CACHE = 'depot-v3';
 const CORE = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const CORE = [
   './js/pdfimport.js',
   './js/scope.js',
   './js/divs.js',
+  './js/parqetimport.js',
   './js/views/overview.js',
   './js/views/positions.js',
   './js/views/activities.js',
