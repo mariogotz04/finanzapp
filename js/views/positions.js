@@ -93,7 +93,7 @@ export function renderPosition(isin) {
       <h3>Wertpapier bearbeiten</h3>
       <label>Name<input id="s-name" value="${esc(sec.name)}"></label>
       <label>Typ<select id="s-type">${['Aktie', 'ETF', 'Fonds', 'Krypto', 'Anleihe'].map((t) => `<option ${t === (sec.type || 'Aktie') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-      <label>Kurs-Symbol (optional)<input id="s-sym" placeholder="automatisch" value="${esc(sec.symbol || '')}"></label>
+      <label>Kurs-Symbol (Alpha Vantage, optional)<input id="s-sym" placeholder="${esc(state.prices.quotes?.[isin]?.symbol || 'z. B. MSFT oder ALV.DEX')}" value="${esc(sec.symbol || '')}"></label>
       <label>Aktienfinder-Link (optional)<input id="s-af" placeholder="automatisch" value="${esc(sec.aktienfinder || '')}"></label>
       <button class="btn primary" id="s-save">Speichern</button>
     </section>`;

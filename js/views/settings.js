@@ -48,7 +48,7 @@ export function renderSettings() {
     </section>
     <section class="card form">
       <h3>Kurse</h3>
-      <p class="muted">Kurse werden werktags automatisch mehrmals aktualisiert.</p>
+      <p class="muted">Kurse kommen von Alpha Vantage (Krypto: CoinGecko) und werden werktags abends automatisch aktualisiert. Der Gratis-Tarif erlaubt 25 Abfragen pro Tag – ein manueller Lauf verbraucht das Tagesbudget.</p>
       <button class="btn" id="k-run" ${ghEnabled() ? '' : 'disabled'}>Kurse jetzt aktualisieren</button>
     </section>
     <section class="card form">
