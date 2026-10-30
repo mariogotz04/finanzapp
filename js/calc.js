@@ -177,7 +177,8 @@ export function computeSeries(p, prices, filterIsin = null) {
       const t = txs[ti];
       pos[t.isin] = pos[t.isin] || { shares: 0, cost: 0, realized: 0 };
       applyTx(pos[t.isin], t);
-      if (t.type === 'buy' && t.shares) lastPrice[t.isin] = lastPrice[t.isin] ?? t.amount / t.shares;
+      // Ohne Kursverlauf: echte Kauf-/Stichtagskurse fortschreiben; Einstands-Buchungen nur als Startwert
+      if (t.type === 'buy' && t.shares) lastPrice[t.isin] = t.source === 'einstand' ? (lastPrice[t.isin] ?? t.amount / t.shares) : t.amount / t.shares;
       ti++;
     }
     let value = 0;
@@ -189,6 +190,8 @@ export function computeSeries(p, prices, filterIsin = null) {
         const cp = currentPrice(p, prices, isin, ps.cost / ps.shares);
         px = cp.price;
       }
+      const sec = p.securities[isin];
+      if (px == null && sec?.lastPrice && sec.lastPriceDate && d >= sec.lastPriceDate) px = sec.lastPrice;
       if (px == null) px = lastPrice[isin] ?? ps.cost / ps.shares;
       lastPrice[isin] = px;
       value += ps.shares * px;

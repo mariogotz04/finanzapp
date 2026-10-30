@@ -25,7 +25,8 @@ export function rangePerf(series) {
   const last = series[series.length - 1];
   if (!first || !last) return { perf: 0, perfPct: 0, from: null };
   const perf = last.value - first.value - (last.invested - first.invested);
-  const base = first.value || last.invested;
+  // Bezug: Startwert plus im Zeitraum neu investiertes Kapital (sonst wirken Nachkäufe wie Rendite)
+  const base = first.value + Math.max(0, last.invested - first.invested) || last.invested;
   return { perf, perfPct: base ? (perf / base) * 100 : 0, from: first.d };
 }
 

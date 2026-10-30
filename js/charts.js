@@ -3,6 +3,8 @@ import { eur, pct, deDate, PALETTE } from './util.js';
 
 const C = () => window.Chart;
 
+const axisEur = (v) => (Math.abs(v) >= 10000 ? `${Math.round(v / 1000)}k` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1).replace('.', ',')}k` : `${Math.round(v)} €`);
+
 export function valueChart(canvas, series) {
   const labels = series.map((s) => s.d);
   return registerChart(
@@ -27,6 +29,8 @@ export function valueChart(canvas, series) {
             borderWidth: 2,
             pointRadius: 0,
             tension: 0.2,
+            // Ohne Kursverlauf gibt es nur Stichtage – dazwischen nicht linear „schönrechnen“
+            stepped: series.length < 30,
           },
           {
             label: 'Investiertes Kapital',
@@ -59,7 +63,7 @@ export function valueChart(canvas, series) {
           y: {
             position: 'right',
             grid: { color: 'rgba(255,255,255,0.05)' },
-            ticks: { color: '#8b93a7', maxTicksLimit: 5, callback: (v) => `${Math.round(v / 1000)}k` },
+            ticks: { color: '#8b93a7', maxTicksLimit: 5, callback: axisEur },
           },
         },
       },
